@@ -5,9 +5,8 @@ import json
 import os
 import time
 import database
-
 import voice 
-import decision  # Added the logging module
+import decision
 
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
@@ -28,18 +27,18 @@ def monitor_posture():
 
     voice.speak_alert("Monitoring activated.")
 
-    # monitor_posture() function ke andar, cap = cv2.VideoCapture(0) se theek pehle:
     current_user_id = database.get_or_create_user()
     cap = cv2.VideoCapture(0)
     
     last_alert_time = 0  
     alert_cooldown = 5.0  
-    current_state = None  # To track state changes and avoid spamming the log
+    current_state = None  
 
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
         while cap.isOpened():
             ret, frame = cap.read()
-            if not ret: break
+            if not ret: 
+                break
 
             frame = cv2.flip(frame, 1)
             h, w, _ = frame.shape
@@ -67,18 +66,20 @@ def monitor_posture():
                     status = "Good Posture"
                     color = (0, 255, 0) 
 
-
                 if status != current_state:
-                    # Save locally (agar purana dashboard bhi chalana hai)
                     decision.log_posture_event(status)
 
-                    # 🚀 Push LIVE data to Supabase
-                    database.log_live_posture(
-                        user_id=current_user_id, 
-                        status=status, 
-                        neck_angle=current_angle, 
-                        back_curvature=0.0  # Isko future pose logic ke liye chhod diya hai
-                    )
+                    # Push LIVE data to Supabase (only on state change to prevent spamming)
+                    try:
+                        database.log_live_posture(
+                            user_id=current_user_id, 
+                            status=status, 
+                            neck_angle=current_angle, 
+                            back_curvature=0.0
+                        )
+                    except Exception as e:
+                        print(f"Supabase Log Error: {e}")
+                        
                     current_state = status
 
                 cv2.putText(image_bgr, status, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
