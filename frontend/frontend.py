@@ -14,6 +14,10 @@ import streamlit as st
 import av
 from streamlit_webrtc import webrtc_streamer, WebRtcMode,RTCConfiguration
 import cv2
+import mediapipe as mp
+import numpy as np
+import math
+
 
 # --------------------------------------------------------------------------
 # PATH CONFIGURATION
@@ -347,13 +351,74 @@ def render_settings_controls():
         st.caption("Alternatively, if `main.py` orchestrates everything (calibration check + posture + walker):")
         st.code(f"cd {BASE_DIR}\npython main.py", language="bash")
 
+
+
+        # Initialize MediaPipe Pose
+        mp_pose = mp.solutions.pose
+        pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        mp_drawing = mp.solutions.drawing_utils
+
+        def calculate_angle(a, b, c):
+            """Calculates the angle between three points (e.g., ear/nose, shoulder, hip)"""
+            a = np.array(a) # First point
+            b = np.array(b) # Mid point (Vertex)
+            c = np.array(c) # End point
+            
+            radians = np.arctan2(c[1] - b[1], c[0] - b[0]) - np.arctan2(a[1] - b[1], a[0] - b[0])
+            angle = np.abs(radians * 180.0 / np.pi)
+            
+            if angle > 180.0:
+                angle = 360.0 - angle
+                
+            return angle
+
         def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
             img = frame.to_ndarray(format="bgr24")
-
-            # Demo text jab tak MediaPipe integrate nahi hota
-            cv2.putText(img, "Live Tracking Active", (20, 50), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
+            
+            # 1. Mirror fix taaki right hand right side dikhe
+            img = cv2.flip(img, 1)
+            h, w, _ = img.shape
+            
+            # 2. Convert to RGB for MediaPipe processing
+            image_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            results = pose.process(image_rgb)
+            
+            if results.pose_landmarks:
+                landmarks = results.pose_landmarks.landmark
+                
+                # Get coordinates for posture analysis (e.g., Shoulder and Ear/Hip reference)
+                shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x * w,
+                            landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y * h]
+                ear = [landmarks[mp_pose.PoseLandmark.LEFT_EAR.value].x * w,
+                    landmarks[mp_pose.PoseLandmark.LEFT_EAR.value].y * h]
+                hip = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x * w,
+                    landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y * h]
+                
+                # Calculate angle
+                angle = calculate_angle(ear, shoulder, hip)
+                
+                # Draw pose landmarks
+                mp_drawing.draw_landmarks(
+                    img, 
+                    results.pose_landmarks, 
+                    mp_pose.POSE_CONNECTIONS,
+                    mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
+                    mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2, circle_radius=2)
+                )
+                
+                # Status logic based on angle
+                status = "Good Posture"
+                color = (0, 255, 0)
+                if angle < 50:  # Threshold example
+                    status = "Slouching Detected!"
+                    color = (0, 0, 255)
+                    
+                cv2.putText(img, f"Angle: {int(angle)} | {status}", (20, 40), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            else:
+                cv2.putText(img, "Align in Camera View", (20, 40), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
+                
             return av.VideoFrame.from_ndarray(img, format="bgr24")
 
         webrtc_streamer(
