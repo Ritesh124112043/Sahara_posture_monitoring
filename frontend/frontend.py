@@ -427,9 +427,12 @@ def render_settings_controls():
             video_frame_callback=video_frame_callback,
             media_stream_constraints={"video": True, "audio": False},
             async_processing=True,
+
             rtc_configuration=RTCConfiguration(
-                {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-            ),
+                {"iceServers": [
+                    {"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}
+                ]}
+            )
         )
         
 
