@@ -11,6 +11,9 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import av
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
+import cv2
 
 # --------------------------------------------------------------------------
 # PATH CONFIGURATION
@@ -344,12 +347,23 @@ def render_settings_controls():
         st.caption("Alternatively, if `main.py` orchestrates everything (calibration check + posture + walker):")
         st.code(f"cd {BASE_DIR}\npython main.py", language="bash")
 
-        mon_col1, mon_col2 = st.columns([1, 3])
-        with mon_col1:
-            if st.button("🎥 Launch Posture Monitor", use_container_width=True):
-                launch_backend_script(POSTURE_SCRIPT, "Posture Monitor")
-        with mon_col2:
-            st.caption("Press **Q** in the OpenCV window to stop monitoring.")
+        def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
+            img = frame.to_ndarray(format="bgr24")
+
+            # Demo text jab tak MediaPipe integrate nahi hota
+            cv2.putText(img, "Live Tracking Active", (20, 50), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+        webrtc_streamer(
+            key="posture-camera",
+            mode=WebRtcMode.SENDRECV,
+            video_frame_callback=video_frame_callback,
+            media_stream_constraints={"video": True, "audio": False},
+            async_processing=True
+        )
+        
 
     st.write("")
 
