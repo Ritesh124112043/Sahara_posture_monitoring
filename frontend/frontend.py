@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 import av
-from streamlit_webrtc import webrtc_streamer, WebRtcMode
+from streamlit_webrtc import webrtc_streamer, WebRtcMode,RTCConfiguration
 import cv2
 
 # --------------------------------------------------------------------------
@@ -361,7 +361,10 @@ def render_settings_controls():
             mode=WebRtcMode.SENDRECV,
             video_frame_callback=video_frame_callback,
             media_stream_constraints={"video": True, "audio": False},
-            async_processing=True
+            async_processing=True,
+            rtc_configuration=RTCConfiguration(
+                {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+            ),
         )
         
 
